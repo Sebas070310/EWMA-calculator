@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EWMA Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF1F3; --panel:#FFFFFF; --ink:#142330; --muted:#566774; --line:#D3DCE1;
+  --accent:#1B6E4B; --low:#4F7396; --mod:#1B6E4B; --elev:#B86F0E; --high:#B3382C;
+  --band-low:#E3EBF2; --band-mod:#DDEFE6; --band-elev:#F6E8D0; --band-high:#F4DAD6;
+  --head:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --body:"Manrope","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0F1A22;--panel:#16242E;--ink:#E6EEF2;--muted:#93A4AF;--line:#263741;--accent:#4CC38A;
+  --low:#7FA6C8;--mod:#4CC38A;--elev:#E0A04A;--high:#EE7F72;
+  --band-low:#1B2C3A;--band-mod:#173528;--band-elev:#3A2E17;--band-high:#3F2220}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body)}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 18px 64px}
+h1,h2,h3{font-family:var(--head);line-height:1.15;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:10px}
+h3{font-size:17px;margin-bottom:6px}
+p{margin:0 0 12px}
+.lede{color:var(--muted);max-width:60ch;margin-top:8px}
+.grid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:18px;margin-top:24px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.stack>*+*{margin-top:18px}
+label{display:block;font-weight:700;font-size:14px;margin-bottom:4px}
+input,select,button{font:inherit;color:inherit}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);padding:9px 14px;border-radius:6px;font-weight:700}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){button.primary{color:#0F1A22}}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.hint{font-size:13px;color:var(--muted)}
+.result{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.big{font:700 clamp(52px,9vw,76px)/1 var(--head);letter-spacing:-.02em}
+.zone{font-weight:700;font-size:18px}
+.stats{display:flex;gap:22px;flex-wrap:wrap;margin:12px 0 4px}
+.stats div{font-size:14px;color:var(--muted)}
+.stats b{display:block;font-size:20px;color:var(--ink);font-family:var(--head)}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--muted);font:11px var(--body)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:6px 0 0}
+.legend i{display:inline-block;width:14px;height:3px;margin-right:6px;vertical-align:middle;border-radius:2px}
+.empty{padding:26px 8px;text-align:center;color:var(--muted)}
+.advice p{margin:0 0 10px;padding-left:12px;border-left:3px solid var(--accent)}
+.zones p{margin-bottom:8px}
+.zones b{display:inline-block;min-width:130px}
+section.more{margin-top:34px}
+section.more .card{margin-bottom:18px}
+a{color:var(--accent)}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:.92em}
+ul.refs{padding-left:20px;margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>EWMA workload ratio</h1>
+    <p class="lede">Log each session, and the tool compares your recent training load (a 7-day weighted average) with your longer-term load (a 28-day weighted average) to show how quickly your workload is changing.</p>
+  </header>
+
+  <div class="grid">
+    <div class="stack">
+      <form class="card" id="form" autocomplete="off">
+        <h2>Log a session</h2>
+        <div class="row">
+          <div><label for="date">Date</label><input type="date" id="date" required></div>
+          <div><label for="min">Minutes</label><input type="number" id="min" min="1" max="600" inputmode="numeric" placeholder="90" required></div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label for="rpe">How hard was it? (RPE 1–10)</label>
+          <select id="rpe" required>
+            <option value="1">1 – Very easy</option><option value="2">2 – Easy</option>
+            <option value="3">3 – Moderate</option><option value="4">4 – Somewhat hard</option>
+            <option value="5">5 – Hard</option><option value="6" selected>6 – Hard+</option>
+            <option value="7">7 – Very hard</option><option value="8">8 – Very, very hard</option>
+            <option value="9">9 – Almost maximal</option><option value="10">10 – Maximal</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="primary" type="submit">Add session</button><button type="button" id="undo">Undo last session</button></div>
+        <p id="status" role="status" style="margin:10px 0 0;font-weight:700;color:var(--accent)"></p>
+        <p class="hint" style="margin-top:10px">Session load = minutes × RPE. Rate it 20–30 minutes after training. Days with no entry count as rest days (zero load). Two sessions on one day add up. Sessions are saved in this browser only.</p>
+      </form>
+    </div>
+
+    <div class="stack">
+      <div class="card" id="resultcard" aria-live="polite">
+        <div class="result"><span class="big" id="ratio">—</span><span class="zone" id="zone"></span></div>
+        <p id="msg" class="hint" style="margin-top:8px"></p>
+        <div class="stats">
+          <div>Acute (7-day)<b id="acute">—</b></div>
+          <div>Chronic (28-day)<b id="chronic">—</b></div>
+          <div>Last session load<b id="last">—</b></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Coach notes</h2>
+        <div class="advice" id="advice" aria-live="polite"></div>
+        <p class="hint">Based only on the sessions you logged. This is general guidance, not medical advice. If you have pain or an injury, check with a coach, physio, or doctor.</p>
+      </div>
+
+      <div class="card">
+        <h2>Daily load and averages</h2>
+        <div id="c1"></div>
+        <div class="legend"><span><i style="background:var(--line);height:8px"></i>Daily load</span><span><i style="background:var(--accent)"></i>Acute</span><span><i style="background:var(--low)"></i>Chronic</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Ratio over time</h2>
+        <div id="c2"></div>
+        <p class="hint">The ratio only appears once you have 28 days of history, because the chronic average is not reliable before that.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="more">
+    <div class="card zones">
+      <h2>What the zones mean</h2>
+      <p><b style="color:var(--low)">Below 0.80</b>Low load. Your recent workload is below your usual average. Consider your training goals and recovery.</p>
+      <p><b style="color:var(--mod)">0.80–1.30</b>Moderate. Your recent workload is close to your longer-term average. Keep monitoring fatigue and recovery.</p>
+      <p><b style="color:var(--elev)">1.30–1.50</b>Elevated. Your recent workload is higher than usual. Watch fatigue and recovery before increasing load.</p>
+      <p><b style="color:var(--high)">Above 1.50</b>Very high. Your recent workload is much higher than usual. Review your training and recovery with your coach or a sports professional.</p>
+      <p class="hint">These are commonly used illustrative ranges, not medical thresholds. Injury risk depends on many factors, and ACWR alone cannot determine it.</p>
+    </div>
+
+    <div class="card">
+      <h2>Method</h2>
+      <p><b>Load.</b> Each session’s load is duration in minutes × session RPE (the session rating of perceived exertion, 1–10). Daily load is the sum of that day’s sessions, and days without sessions are zero.</p>
+      <p><b>Weighted average (EWMA).</b> Each day’s load is blended with the previous average: <code>EWMA<sub>t</sub> = λ·load<sub>t</sub> + (1 − λ)·EWMA<sub>t−1</sub></code>, with λ = 2 ÷ (N + 1), using N = 7 for acute and N = 28 for chronic. Recent days count more than older ones. The ratio is acute ÷ chronic.</p>
+      <p><b>Limits.</b> This uses self-reported data and a simple model. ACWR is debated in the research literature, so treat it as one monitoring signal alongside how you feel, sleep, and what your coach sees.</p>
+      <p><b>Coach notes.</b> These are simple rule-based messages, not AI, and nothing is sent anywhere. They look at the ratio zone, how this week’s total load compares with last week’s, whether you had a rest day in the last 7 days, and how similar your training days have been (mean daily load ÷ standard deviation over 7 days, often called monotony). The cutoffs are illustrative rules of thumb.</p>
+      <h3>Further reading</h3>
+      <ul class="refs">
+        <li>Foster et al. (2001), session RPE method for monitoring training, <i>Journal of Strength and Conditioning Research</i>.</li>
+        <li>Gabbett (2016), the training–injury prevention paradox, <i>British Journal of Sports Medicine</i>.</li>
+        <li>Impellizzeri et al. (2020), conceptual issues and pitfalls of ACWR, <i>International Journal of Sports Physiology and Performance</i>.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>About</h2>
+      <p>Hi, I’m Sebastian Sotelo, a soccer player from Panama.</p>
+      <p>I had the idea to make a load management and injury prevention tool for people who don’t have the best resources. Sports scientists, GPS vests, and wearables are expensive, and many athletes train hard without any of them. I wanted to show that a simple, free tool can still help someone keep an eye on their training.</p>
+      <p><b>What makes it accessible.</b> All you need is a phone or computer. You log how long you trained and how hard it felt (RPE), and the tool does the math. There are no sensors to buy, no account to create, and nothing to pay for.</p>
+      <p><b>Why EWMA.</b> I use a weighted average so that recent training counts more than older training, which makes the ratio more responsive to sudden changes in workload.</p>
+      <p><b>Your privacy.</b> Your sessions are stored only in your own browser. Nothing is sent to a server.</p>
+      <p><b>Where this is going.</b> This is a project I’m still building and improving. It’s meant to help athletes and coaches monitor training load, and it is not medical advice. If you have pain or an injury, talk to a qualified professional.</p>
+      <p>Source code: <a href="https://github.com/Sebas070310/EWMA-calculator">github.com/Sebas070310/EWMA-calculator</a></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var KEY="acwr.entries.v1", DAY=86400000;
+  var entries=[];
+  try{entries=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){}
+  var $=function(id){return document.getElementById(id)};
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
+  function toT(s){var p=s.split("-").map(Number);return Date.UTC(p[0],p[1]-1,p[2])}
+  function toS(t){return new Date(t).toISOString().slice(0,10)}
+  function todayS(){var n=new Date();return toS(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))}
+  function zoneOf(r){
+    if(r<0.8)return{n:"Low load",c:"var(--low)"};
+    if(r<=1.3)return{n:"Moderate",c:"var(--mod)"};
+    if(r<=1.5)return{n:"Elevated",c:"var(--elev)"};
+    return{n:"Very high",c:"var(--high)"};
+  }
+  function build(){
+    if(!entries.length)return[];
+    var by={};
+    entries.forEach(function(e){by[e.date]=(by[e.date]||0)+e.min*e.rpe});
+    var ts=Object.keys(by).map(toT);
+    var start=Math.min.apply(null,ts), end=Math.max(Math.max.apply(null,ts),toT(todayS()));
+    var out=[], ea=null, ec=null, la=2/8, lc=2/29;
+    for(var t=start;t<=end;t+=DAY){
+      var s=toS(t), load=by[s]||0;
+      ea=ea===null?load:la*load+(1-la)*ea;
+      ec=ec===null?load:lc*load+(1-lc)*ec;
+      out.push({s:s,load:load,ea:ea,ec:ec});
+    }
+    out.forEach(function(p,i){
+      p.a=p.ea; p.c=p.ec;
+      p.ready=i>=27;
+      p.ratio=(p.ready&&p.c>0)?p.a/p.c:null;
+    });
+    return out;
+  }
+  function fmt(n){return n===null||n===undefined?"—":(Math.round(n*10)/10).toString()}
+  function line(pts,color,w){
+    var d=pts.map(function(p,i){return(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)}).join(" ");
+    return'<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+(w||2)+'" stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  var W=640,H=210,L=40,R=10,T=10,B=24;
+  function xs(i,n){return n<2?L+(W-L-R)/2:L+(W-L-R)*i/(n-1)}
+  function ticks(win,n){
+    var idx=[0,Math.floor((n-1)/2),n-1],o="";
+    idx.forEach(function(i,k){
+      if(k&&idx[k]===idx[k-1])return;
+      o+='<text x="'+xs(i,n)+'" y="'+(H-6)+'" text-anchor="'+(i===0?"start":i===n-1?"end":"middle")+'">'+win[i].s.slice(5)+'</text>';
+    });
+    return o;
+  }
+  function chart1(win){
+    var n=win.length,max=1;
+    win.forEach(function(p){max=Math.max(max,p.load,p.a,p.c)});
+    var y=function(v){return T+(H-T-B)*(1-v/max)};
+    var bw=Math.max(2,Math.min(14,(W-L-R)/n*0.7)),s="";
+    [0,.5,1].forEach(function(f){
+      var v=max*f;
+      s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+Math.round(v)+'</text>';
+    });
+    win.forEach(function(p,i){
+      s+='<rect x="'+(xs(i,n)-bw/2)+'" y="'+y(p.load)+'" width="'+bw+'" height="'+(y(0)-y(p.load))+'" fill="var(--line)"/>';
+    });
+    s+=line(win.map(function(p,i){return[xs(i,n),y(p.c)]}),"var(--low)",2);
+    s+=line(win.map(function(p,i){return[xs(i,n),y(p.a)]}),"var(--accent)",2);
+    s+=ticks(win,n);
+    return'<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Daily load with acute and chronic averages">'+s+'</svg>';
+  }
+  function chart2(win){
+    var n=win.length,max=2;
+    win.forEach(function(p){if(p.ratio!==null)max=Math.max(max,p.ratio)});
+    max=Math.ceil(max*2)/2;
+    var y=function(v){return T+(H-T-B)*(1-v/max)};
+    var bands=[[0,.8,"low"],[.8,1.3,"mod"],[1.3,1.5,"elev"],[1.5,max,"high"]],s="";
+    bands.forEach(function(b){
+      s+='<rect x="'+L+'" y="'+y(b[1])+'" width="'+(W-L-R)+'" height="'+(y(b[0])-y(b[1]))+'" fill="var(--band-'+b[2]+')"/>';
+    });
+    [0.8,1.3,1.5].forEach(function(v){s+='<text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v.toFixed(1)+'</text>'});
+    var pts=[];
+    win.forEach(function(p,i){if(p.ratio!==null)pts.push([xs(i,n),y(p.ratio)])});
+    if(pts.length){
+      s+=line(pts,"var(--ink)",2.2);
+      var e=pts[pts.length-1];
+      s+='<circle cx="'+e[0]+'" cy="'+e[1]+'" r="4" fill="var(--ink)"/>';
+    }
+    s+=ticks(win,n);
+    return'<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="ACWR over time with risk zones">'+s+'</svg>';
+  }
+  function advise(data){
+    var n=data.length;
+    if(n<7)return["Keep logging. Coach notes get more useful after a week of data, and ratio-based advice appears after 28 days."];
+    var sum=function(a){return a.reduce(function(x,y){return x+y},0)};
+    var loads=data.slice(-7).map(function(q){return q.load});
+    var wk=sum(loads), mean=wk/7, p=data[n-1], msgs=[];
+    var sd=Math.sqrt(sum(loads.map(function(v){return(v-mean)*(v-mean)}))/7);
+    var mono=sd>0?mean/sd:(mean>0?Infinity:null);
+    var rest=loads.filter(function(v){return v===0}).length;
+    var prev=n>=14?sum(data.slice(-14,-7).map(function(q){return q.load})):null;
+    var ch=(prev&&prev>0)?(wk-prev)/prev:null;
+    var r=p.ratio;
+    if(r!==null&&r>1.5)msgs.push("Your recent training load is much higher than what your body is used to. Consider an easier session or a rest day, and pay close attention to how you feel.");
+    else if(r!==null&&r>1.3)msgs.push("Your load is climbing faster than usual. Avoid adding more volume or intensity for now, and prioritize sleep, food, and recovery.");
+    if(ch!==null&&ch>0.2)msgs.push("This week’s training is well above last week’s. Try to build up more gradually, with smaller steps from week to week.");
+    if(rest===0&&mean>0)msgs.push("You haven’t had a full rest day in the last 7 days. Plan at least one day off or a very light session.");
+    if(mono!==null&&mono>2&&rest>0)msgs.push("Your training days have been very similar. Mixing harder days with easier ones helps your body recover.");
+    if(r!==null&&r<0.8)msgs.push("Your recent load is lower than usual. If you’re not resting on purpose, build back up gradually instead of jumping straight into a hard week.");
+    if(ch!==null&&ch<-0.4)msgs.push("Your load dropped a lot compared with last week. If that was planned rest, good. Build back up gradually.");
+    if(!msgs.length)msgs.push(r!==null?"Your load looks steady. Keep logging and keep listening to how you feel.":"Your training looks steady so far. Ratio-based advice appears after 28 days of data.");
+    return msgs.slice(0,3);
+  }
+  function showAdvice(list){
+    $("advice").innerHTML=list.map(function(m){return"<p>"+m+"</p>"}).join("");
+  }
+  function render(){
+    var data=build(), win=data.slice(-90);
+    $("undo").disabled=!entries.length;
+    if(!data.length){
+      $("ratio").textContent="—";$("ratio").style.color="";$("zone").textContent="";
+      $("msg").textContent="Add your first session to get started.";
+      $("acute").textContent=$("chronic").textContent=$("last").textContent="—";
+      $("c1").innerHTML=$("c2").innerHTML='<div class="empty">Your charts will appear here once you log a session.</div>';
+      showAdvice(["Log your first session to get coach notes."]);
+      return;
+    }
+    var p=data[data.length-1], lastSession=null;
+    for(var i=data.length-1;i>=0;i--){if(data[i].load>0){lastSession=data[i].load;break}}
+    $("acute").textContent=fmt(p.a);$("chronic").textContent=fmt(p.c);$("last").textContent=fmt(lastSession);
+    if(p.ratio===null){
+      $("ratio").textContent="—";$("ratio").style.color="";$("zone").textContent="";
+      var left=Math.max(0,28-data.length);
+      $("msg").textContent=left>0?"Building your baseline: "+left+" more day"+(left>1?"s":"")+" of history needed before the ratio is reliable.":"Chronic load is zero, so the ratio can’t be calculated.";
+    }else{
+      var z=zoneOf(p.ratio);
+      $("ratio").textContent=p.ratio.toFixed(2);$("ratio").style.color=z.c;
+      $("zone").textContent=z.n;$("zone").style.color=z.c;
+      $("msg").textContent="As of "+p.s+". Use this as one signal alongside how you feel and what your coach sees.";
+    }
+    $("c1").innerHTML=chart1(win);$("c2").innerHTML=chart2(win);
+    showAdvice(advise(data));
+  }
+  $("date").value=todayS();
+  $("form").addEventListener("submit",function(ev){
+    ev.preventDefault();
+    var m=parseInt($("min").value,10), r=parseInt($("rpe").value,10), d=$("date").value;
+    if(!d||!(m>0)||!(r>=1&&r<=10))return;
+    entries.push({id:Date.now(),date:d,min:m,rpe:r});
+    save();$("min").value="";render();
+    $("status").style.color="var(--accent)";
+    $("status").textContent="Added: "+m+" min × RPE "+r+" = load "+(m*r)+" on "+d+". Sessions logged: "+entries.length+".";
+    if(window.innerWidth<=820){
+      var calm=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      $("resultcard").scrollIntoView({behavior:calm?"auto":"smooth",block:"start"});
+    }
+  });
+  $("undo").addEventListener("click",function(){
+    if(!entries.length)return;
+    entries.pop();save();render();
+    $("status").style.color="var(--accent)";
+    $("status").textContent="Removed the last session. Sessions logged: "+entries.length+".";
+  });
+  render();
+  try{localStorage.setItem("__t","1");localStorage.removeItem("__t")}catch(e){
+    $("status").style.color="var(--high)";
+    $("status").textContent="Your browser is blocking saving, so sessions will be lost when you close or refresh this page. Try opening the link in Chrome or Safari instead of an in-app browser or private window.";
+  }
+})();
+</script>
+</body>
+</html>
